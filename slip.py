@@ -43,6 +43,7 @@ class Enlace:
     def __init__(self, linha_serial):
         self.linha_serial = linha_serial
         self.linha_serial.registrar_recebedor(self.__raw_recv)
+        self.dados_res = b''
 
     def registrar_recebedor(self, callback):
         self.callback = callback
@@ -51,9 +52,39 @@ class Enlace:
         # TODO: Preencha aqui com o código para enviar o datagrama pela linha
         # serial, fazendo corretamente a delimitação de quadros e o escape de
         # sequências especiais, de acordo com o protocolo CamadaEnlace (RFC 1055).
+
+        datagrama = datagrama.replace(b'\xdb', b'\xdb\xdd') # Passo 2
+        datagrama = datagrama.replace(b'\xc0', b'\xdb\xdc') # Passo 1
+
+        self.linha_serial.enviar(b'\xc0' + datagrama + b'\xc0')
         pass
 
     def __raw_recv(self, dados):
+        # Passo 3:
+        dados = self.dados_res + dados
+        self.dados_res = b''
+
+        if not dados.endswith(b'\xc0'):
+            dados = dados.split(b'\xc0')
+            dados = list(filter((b'').__ne__, dados))
+            self.dados_res = self.dados_res + dados.pop(-1)
+        else:
+            dados = dados.split(b'\xc0')
+            dados = list(filter((b'').__ne__, dados))
+
+        for datagrama in dados:
+		
+            # Passo 4
+            datagrama = datagrama.replace(b'\xdb\xdc', b'\xc0')
+            datagrama = datagrama.replace(b'\xdb\xdd', b'\xdb')  
+	
+	    # Passo 5
+            try:
+                self.callback(datagrama)
+            except:
+                import traceback
+                traceback.print_exc()
+
         # TODO: Preencha aqui com o código para receber dados da linha serial.
         # Trate corretamente as sequências de escape. Quando ler um quadro
         # completo, repasse o datagrama contido nesse quadro para a camada
@@ -61,4 +92,6 @@ class Enlace:
         # vir quebrado de várias formas diferentes - por exemplo, podem vir
         # apenas pedaços de um quadro, ou um pedaço de quadro seguido de um
         # pedaço de outro, ou vários quadros de uma vez só.
-        pass
+    pass
+    
+    
